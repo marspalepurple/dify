@@ -1,7 +1,7 @@
 import json
 
 import flask_login
-from flask import Response, request
+from flask import Response, g, request
 from flask_login import user_loaded_from_request, user_logged_in
 from werkzeug.exceptions import NotFound, Unauthorized
 
@@ -10,10 +10,17 @@ from constants import HEADER_NAME_APP_CODE
 from dify_app import DifyApp
 from extensions.ext_database import db
 from libs.passport import PassportService
-from libs.token import extract_access_token, extract_webapp_passport
+from libs.token import (
+    extract_access_token,
+    extract_webapp_passport,
+    set_access_token_to_cookie,
+    set_csrf_token_to_cookie,
+    set_refresh_token_to_cookie,
+)
 from models import Account, Tenant, TenantAccountJoin
 from models.model import AppMCPServer, EndUser
 from services.account_service import AccountService
+from services.external_auth_service import ExternalAuthService
 
 login_manager = flask_login.LoginManager()
 
@@ -50,6 +57,11 @@ def load_user_from_request(request_from_flask_login):
 
     if request.blueprint in {"console", "inner_api"}:
         if not auth_token:
+            external_auth = ExternalAuthService.authenticate_request(request)
+            if external_auth:
+                g.external_auth_token_pair = external_auth.token_pair
+                g.external_auth_skip_csrf = True
+                return external_auth.account
             raise Unauthorized("Invalid Authorization token.")
         decoded = PassportService().verify(auth_token)
         user_id = decoded.get("user_id")
@@ -125,3 +137,16 @@ def unauthorized_handler():
 
 def init_app(app: DifyApp):
     login_manager.init_app(app)
+
+    @app.after_request
+    def apply_external_auth_cookies(response: Response):  # pyright: ignore[reportUnusedFunction]
+        token_pair = getattr(g, "external_auth_token_pair", None)
+        if not token_pair:
+            return response
+
+        set_access_token_to_cookie(request, response, token_pair.access_token)
+        set_refresh_token_to_cookie(request, response, token_pair.refresh_token)
+        set_csrf_token_to_cookie(request, response, token_pair.csrf_token)
+        return response
+
+    _ = apply_external_auth_cookies
