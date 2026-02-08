@@ -63,6 +63,31 @@ class SecurityConfig(BaseSettings):
         default=None,
     )
 
+    EXTERNAL_AUTH_ENABLED: bool = Field(
+        description="Enable external JWE-based SSO authentication for console requests.",
+        default=False,
+    )
+
+    EXTERNAL_AUTH_COOKIE_NAME: str = Field(
+        description="Cookie name containing the external JWE token.",
+        default="x-auth",
+    )
+
+    EXTERNAL_AUTH_JWE_KEY: str = Field(
+        description="JWE decryption key (hex:, base64:, b64:, or raw 32-byte key).",
+        default="",
+    )
+
+    EXTERNAL_AUTH_EMAIL_DOMAIN: str = Field(
+        description="Fallback email domain for login names without '@'.",
+        default="",
+    )
+
+    EXTERNAL_AUTH_DEFAULT_TENANT_ID: str | None = Field(
+        description="Default tenant ID to join when provisioning external users.",
+        default=None,
+    )
+
 
 class AppExecutionConfig(BaseSettings):
     """
